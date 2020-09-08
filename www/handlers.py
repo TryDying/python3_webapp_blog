@@ -13,5 +13,9 @@ from .models import User, Comment, Blog, next_id
 
 @get("/")
 async def index(request):
-    users = await User.findAll()
-    return {"__template__": "test.html", "users": users}
+    summary = "Lorem ipsum dolor sit amet, consetetur sadipscing elitr, sed diam nonumy eirmod tempor invidunt ut labore et dolore magna aliquyam erat, sed diam voluptua. At vero eos et accusam et justo duo dolores et ea rebum. Stet clita kasd gubergren, no sea takimata sanctus est Lorem ipsum dolor sit amet."
+    blogs = [
+        Blog(id="1", name="Blog1", summary=summary, created_at=time.time()),
+        Blog(id="2", name="Blog2", summary=summary, created_at=time.time() - 3600),
+    ]
+    return {"__template__": "blogs.html", "blogs": blogs}

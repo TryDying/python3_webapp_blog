@@ -113,6 +113,11 @@ async def response_factory(app, handler):
 
 
 def datetime_filter(t):
+    """
+    创建日期
+    float -> Y.M.D
+    """
+
     delta = int(time.time() - t)
     if delta < 60:
         return u"1分钟前"
