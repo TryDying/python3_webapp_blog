@@ -10,7 +10,7 @@ logging.basicConfig(level=logging.INFO)
 
 
 def log(sql):
-    logging.info("SQL:%s" % sql)
+    logging.info("SQL: %s" % sql)
 
 
 async def create_pool(loop, **kw):
@@ -41,7 +41,7 @@ async def create_pool(loop, **kw):
 
 async def select(sql, args, size=None):
     """定义select行为"""
-    logging.log(sql)
+    log(sql)
     global __pool
     async with __pool.get() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
@@ -55,7 +55,7 @@ async def select(sql, args, size=None):
         return res
 
 
-async def execute(sql, args):
+async def execute(sql, args, autocommit=True):
     """execute INSERT, UPDATE, DELETE"""
     log(sql)
     async with __pool.get() as conn:
@@ -176,11 +176,11 @@ class ModelMetaclass(type):
             attrs.pop(k)
 
         escaped_fields = list(map(lambda f: "`%s`" % f, fields))
-        attrs["__mappings"] = mappings
+        attrs["__mappings__"] = mappings
         attrs["__table__"] = tableName
         attrs["__primary_key__"] = primaryKey  # primaryKey
         attrs["__fields__"] = fields  # keyname except primaryKey
-        attrs["__select__"] = "selsect `%s`, %s from `%s`" % (
+        attrs["__select__"] = "select `%s`, %s from `%s`" % (
             primaryKey,
             ", ".join(escaped_fields),
             tableName,
@@ -205,7 +205,6 @@ class Model(dict, metaclass=ModelMetaclass):
     """Base Model"""
 
     def __init__(self, **kw):
-        #  super(Model, self).__init__(**kw)
         super().__init__(**kw)
 
     def __getattr__(self, key):
@@ -259,7 +258,7 @@ class Model(dict, metaclass=ModelMetaclass):
             else:
                 raise ValueError
         res = await select(" ".join(sql), args)
-        return [cls(**r) for i in res]
+        return [cls(**r) for r in res]
 
     @classmethod
     async def findNumber(cls, selectField, where=None, args=None):
@@ -290,29 +289,18 @@ class Model(dict, metaclass=ModelMetaclass):
         return cls(**rs[0])
 
     async def save(self):
-        """TODO: Docstring for save.
-        :returns: TODO
 
-        """
         args = list(map(self.getValueOrDefault, self.__fields__))
         args.append(self.getValueOrDefault(self.__primary_key__))
         rows = await execute(self.__insert__, args)
 
     async def update(self):
-        """TODO: Docstring for update.
 
-        :f: TODO
-        :returns: TODO
-
-        """
         args = list(map(self.getValue, self.__fields__))
         args.append(self.getValue(self.__primary_key__))
         rows = await execute(self.__update__, args)
 
     async def remove(self):
-        """TODO: Docstring for remove.
-        :returns: TODO
 
-        """
         args = [self.getValue(self.__primary_key__)]
         rows = await execute(self.__delete__, args)

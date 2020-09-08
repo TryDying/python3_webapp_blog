@@ -142,7 +142,7 @@ class RequestHandler(object):
                     for k, v in parse.parse_qs(qs, True).items():
                         kw[k] = v[0]
         if kw is None:
-            ke = dict(**request.match_info)
+            kw = dict(**request.match_info)
         else:
             if not self._has_var_kw_arg and self._named_kw_args:
                 copy = dict()
@@ -163,7 +163,7 @@ class RequestHandler(object):
             for name in self._required_kw_args:
                 if not name in kw:
                     return web.HTTPBadRequest("missing arg: %s" % name)
-        logging.info("call with args:%s" % str(kw))
+        logging.info("call with args: %s" % str(kw))
         try:
             r = await self._func(**kw)
             return r
@@ -174,7 +174,7 @@ class RequestHandler(object):
 def add_static(app):
     path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "static")
     app.router.add_static("/static/", path)
-    logging.info("add static %s=>%s" % ("/static/", path))
+    logging.info("add static %s => %s" % ("/static/", path))
 
 
 def add_route(app, fn):

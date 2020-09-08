@@ -43,3 +43,5 @@ async def test():
 
 
 loop.run_until_complete(test())
+#  u = User(name="trydying")
+#  u.update()
