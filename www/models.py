@@ -3,7 +3,14 @@
 
 __author__ = "trydying"
 import time, uuid
-from www.orm import Model, StringField, BooleanField, FloatField, TextField
+from .orm import (
+    Model,
+    StringField,
+    BooleanField,
+    FloatField,
+    TextField,
+    IntegerField,
+)
 
 
 def next_id():
@@ -14,7 +21,7 @@ def next_id():
 
 
 class User(Model):
-    __table__ = "users"
+    __table__ = "users"  #  不定义，将使用class_name: User
 
     id = StringField(primary_key=True, default=next_id, ddl="varchar(50)")
     email = StringField(ddl="varchar(50)")
@@ -25,17 +32,15 @@ class User(Model):
     created_at = FloatField(default=time.time)
 
 
-class Blod(Module):
-
-    """Docstring for Blod. """
-
-    __table__ = "comments"
+class Blog(Model):
+    __table__ = "blogs"
 
     id = StringField(primary_key=True, default=next_id, ddl="varchar(50)")
-    blog_id = StringField(ddl="varchar(50)")
     user_id = StringField(ddl="varchar(50)")
     user_name = StringField(ddl="varchar(50)")
     user_image = StringField(ddl="varchar(500)")
+    name = StringField(ddl="varchar(50)")
+    summary = StringField(ddl="varchar(200)")
     content = TextField()
     created_at = FloatField(default=time.time)
 

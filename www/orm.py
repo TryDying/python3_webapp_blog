@@ -5,18 +5,29 @@ __author__ = "trydying"
 import asyncio, logging
 import aiomysql
 
+logging.basicConfig(level=logging.INFO)
+
+
+def log(sql):
+    logging.info("SQL:%s" % sql)
+
 
 async def create_pool(loop, **kw):
+    """
+    定义连接mysql的行为
+    创建全局连接池__pool
+    """
+    logging.info("create database connection pool...")
     global __pool
     __pool = await aiomysql.create_pool(
-        host=kw.get("host", "localhost"),
+        host=kw.get("host", "localhost"),  # host, default=localhost
         port=kw.get("port", 3306),
         user=kw["user"],
         password=kw["password"],
         db=kw["db"],
         charset=kw.get("charset", "utf8"),
-        autocommit=kw.get("autocommit", True),
-        maxsize=kw.get("maxsize", 10),
+        autocommit=kw.get("autocommit", True),  #  whether autocommit, default is true
+        maxsize=kw.get("maxsize", 10),  #  max connection numbers
         minsize=kw.get("minsize", 1),
         loop=loop,
     )
@@ -24,21 +35,24 @@ async def create_pool(loop, **kw):
 
 
 async def select(sql, args, size=None):
-    """orm of select"""
+    """定义select行为"""
+    logging.log(sql)
     global __pool
     async with __pool.get() as conn:
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(sql.replace("?", "%s"), args or ())  # ? => %s
             if size:
-                res = await cur.fetchmany(size)
+                res = await cur.fetchmany(size)  #  获取 size 行
             else:
                 res = await cur.fetchall()
 
+        logging.info("rows returned:%s" % len(res))
         return res
 
 
 async def execute(sql, args):
-    """execute for INSERT, UPDATE, DELETE"""
+    """execute INSERT, UPDATE, DELETE"""
+    log(sql)
     async with __pool.get() as conn:
         if not autocommit:
             await conn.begin()
@@ -56,7 +70,9 @@ async def execute(sql, args):
 
 
 def create_args_string(num):
-    """return '?,?,?,?'
+    """
+    生成占位符
+    返回 '?,?,?,?'
     """
     L = []
     for n in range(num):
@@ -66,25 +82,27 @@ def create_args_string(num):
 
 class Field(object):
 
-    """Init Field"""
+    """
+    base field
+    实现column_name, column_type, primary_key的映射
+    """
 
     def __init__(self, name, column_type, primary_key, default):
-        """TODO: to be defined.
-
-        """
         self._name = name
         self._column_type = column_type
         self._primary_key = primary_key
         self._default = default
-
-    def __str__(self):
-        return "<%s, %s:%s>" % (self.__class__.__name__, self._column_type, self._name)
 
     def __repr__(self):
         return "<%s, %s:%s>" % (self.__class__.__name__, self._column_type, self._name)
 
 
 class StringField(Field):
+    """
+    stringfield字段
+    在base field的基础上绑定一个column_type
+    """
+
     def __init__(self, name=None, primary_key=False, default=None, ddl="varchar(100)"):
         super().__init__(name, ddl, primary_key, default)
 
@@ -100,9 +118,6 @@ class IntegerField(Field):
 
 
 class FloatField(Field):
-
-    """subclass field for float"""
-
     def __init__(self, name=None, primary_key=False, default=0.0):
         super().__init__(name, "real", primary_key, default)
 
@@ -114,13 +129,25 @@ class TextField(Field):
 
 class ModelMetaclass(type):
 
-    """define new type"""
+    """
+    Model的模板，继承自type，控制创建Model的行为
+    User实例的创建过程:
+    继承Model -> 创建User(属性) -> 参照Metaclass修改属性 -> 根据传入参数完成__init__
+    metaclass修改User中的attrs,增加__mappings__,__fields__, __table__等属性
+    并在attrs中删除冗余的__mappings__映射
+    """
 
     def __new__(cls, name, bases, attrs):
-        if name == "Model":
+        """
+        : cls class :Model or User or Blog...
+        : name self.__class__.__name__: "Model" or "User" or "Field" ...
+        : bases ModelMetaclass or Model or Field
+        : attrs key->value
+        """
+        if name == "Model":  #  排除Model类,避免重复Metaclass->Model->User中的重复操作
             return type.__new__(cls, name, bases, attrs)
-        tableName = attr.get("__table__", None) or name
-        mapppings = dict()
+        tableName = attrs.get("__table__", None) or name
+        mappings = dict()  # 空dict,用于保存Field映射，再赋给attrs["__mappings__"]
         fields = []
         primaryKey = None
         for k, v in attrs.items():
@@ -130,8 +157,19 @@ class ModelMetaclass(type):
                     primaryKey = k
                 else:
                     fields.append(k)
+        if not primaryKey:
+            raise Warning("Primary key not found")
+
         for k in mappings.keys():
+            """
+            以id属性为例
+            User将id绑定到Field类,而后参照Metaclass将id属性删除，增加__mappings__属性
+            初始化实例u=User(id=...)时，调用Model类(dict)__init__，将id键值赋给User instance
+            Model中定义了__getattr__，使得id可以用u.id直接访问，不必使用u['id']
+            若在此处不删除User的id属性，u.id将访问User中的id属性，而不会调用Model中的getattr
+            """
             attrs.pop(k)
+
         escaped_fields = list(map(lambda f: "`%s`" % f, fields))
         attrs["__mappings"] = mappings
         attrs["__table__"] = tableName
@@ -150,7 +188,7 @@ class ModelMetaclass(type):
         )
         attrs["__update__"] = "update `%s` set %s where `%s`=?" % (
             tableName,
-            ", ".join(map(lambda f: "`%s`=?" % (mappings.get(f).name or f), fields)),
+            ", ".join(map(lambda f: "`%s`=?" % (mappings.get(f)._name or f), fields)),
             primaryKey,
         )
         attrs["__delete__"] = "delete from `%s` where `%s`=?" % (tableName, primaryKey)
@@ -159,7 +197,7 @@ class ModelMetaclass(type):
 
 class Model(dict, metaclass=ModelMetaclass):
 
-    """Docstring for Model. """
+    """Base Model"""
 
     def __init__(self, **kw):
         #  super(Model, self).__init__(**kw)
@@ -168,11 +206,11 @@ class Model(dict, metaclass=ModelMetaclass):
     def __getattr__(self, key):
         return self[key]
 
-    def _setattr__(self, key, value):
+    def __setattr__(self, key, value):
         self[key] = value
 
     def getValue(self, key):
-        return getattr(self, key, None)
+        return self.__getattr__(key)
 
     def getValueOrDefault(self, key):
         value = getattr(self, key, None)
@@ -180,7 +218,7 @@ class Model(dict, metaclass=ModelMetaclass):
             field = self.__mappings__[key]
             if field.default is not None:
                 value = field.default() if callable(field.default) else field.default
-                setattr(self, key, value)
+                self.__setattr__(key, value)
         return value
 
     @classmethod
