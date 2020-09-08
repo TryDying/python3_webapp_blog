@@ -2,7 +2,8 @@
 # -*- coding: utf-8 -*-
 
 __author__ = "trydying"
-import asyncio, logging
+import asyncio
+import logging
 import aiomysql
 
 logging.basicConfig(level=logging.INFO)
@@ -22,12 +23,16 @@ async def create_pool(loop, **kw):
     __pool = await aiomysql.create_pool(
         host=kw.get("host", "localhost"),  # host, default=localhost
         port=kw.get("port", 3306),
-        user=kw["user"],
-        password=kw["password"],
-        db=kw["db"],
+        #  password=kw["password"],
+        #  user=kw["user"],
+        #  db=kw["db"],
+        password=kw.get("password"),
+        user=kw.get("user"),
+        db=kw.get("db"),
         charset=kw.get("charset", "utf8"),
-        autocommit=kw.get("autocommit", True),  #  whether autocommit, default is true
-        maxsize=kw.get("maxsize", 10),  #  max connection numbers
+        # whether autocommit, default is true
+        autocommit=kw.get("autocommit", True),
+        maxsize=kw.get("maxsize", 10),  # max connection numbers
         minsize=kw.get("minsize", 1),
         loop=loop,
     )
@@ -42,7 +47,7 @@ async def select(sql, args, size=None):
         async with conn.cursor(aiomysql.DictCursor) as cur:
             await cur.execute(sql.replace("?", "%s"), args or ())  # ? => %s
             if size:
-                res = await cur.fetchmany(size)  #  获取 size 行
+                res = await cur.fetchmany(size)  # 获取 size 行
             else:
                 res = await cur.fetchall()
 
@@ -144,7 +149,7 @@ class ModelMetaclass(type):
         : bases ModelMetaclass or Model or Field
         : attrs key->value
         """
-        if name == "Model":  #  排除Model类,避免重复Metaclass->Model->User中的重复操作
+        if name == "Model":  # 排除Model类,避免重复Metaclass->Model->User中的重复操作
             return type.__new__(cls, name, bases, attrs)
         tableName = attrs.get("__table__", None) or name
         mappings = dict()  # 空dict,用于保存Field映射，再赋给attrs["__mappings__"]

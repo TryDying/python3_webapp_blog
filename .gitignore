@@ -1,4 +1,5 @@
 .vimspector.json
 .mypy_cache
+.vim
 __pycache__
 
