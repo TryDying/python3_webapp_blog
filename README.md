@@ -2,7 +2,14 @@
 
 参考教程[Python教程-廖雪峰](https://www.liaoxuefeng.com/wiki/1016959663602400)
 
-[TOC]
+<!-- vim-markdown-toc GFM -->
+
+* [环境说明](#环境说明)
+* [文件目录结构](#文件目录结构)
+
+<!-- vim-markdown-toc -->
+
+
 
 
 ## 环境说明

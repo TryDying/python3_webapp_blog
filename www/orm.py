@@ -6,8 +6,6 @@ import asyncio
 import logging
 import aiomysql
 
-logging.basicConfig(level=logging.INFO)
-
 
 def log(sql):
     logging.info("SQL: %s" % sql)
@@ -23,11 +21,8 @@ async def create_pool(loop, **kw):
     __pool = await aiomysql.create_pool(
         host=kw.get("host", "localhost"),  # host, default=localhost
         port=kw.get("port", 3306),
-        #  password=kw["password"],
-        #  user=kw["user"],
-        #  db=kw["db"],
-        password=kw.get("password"),
         user=kw.get("user"),
+        password=kw.get("password"),
         db=kw.get("db"),
         charset=kw.get("charset", "utf8"),
         # whether autocommit, default is true
@@ -36,7 +31,6 @@ async def create_pool(loop, **kw):
         minsize=kw.get("minsize", 1),
         loop=loop,
     )
-    return
 
 
 async def select(sql, args, size=None):
@@ -113,8 +107,10 @@ class StringField(Field):
 
 
 class BooleanField(Field):
-    def __init__(self, name=None, primary_key=False, default=False):
-        super().__init__(name, "boolean", primary_key, default)
+    #  def __init__(self, name=None, primary_key=False, default=False):
+    #      super().__init__(name, "boolean", primary_key, default)
+    def __init__(self, name=None, default=False):
+        super().__init__(name, "boolean", False, default)
 
 
 class IntegerField(Field):
@@ -128,8 +124,10 @@ class FloatField(Field):
 
 
 class TextField(Field):
-    def __init__(self, name=None, primary_key=False, default=None):
-        super().__init__(name, "text", primary_key, default)
+    #  def __init__(self, name=None, primary_key=False, default=None):
+    #      super().__init__(name, "text", primary_key, default)
+    def __init__(self, name=None, default=None):
+        super().__init__(name, "text", False, default)
 
 
 class ModelMetaclass(type):
@@ -152,11 +150,14 @@ class ModelMetaclass(type):
         if name == "Model":  # 排除Model类,避免重复Metaclass->Model->User中的重复操作
             return type.__new__(cls, name, bases, attrs)
         tableName = attrs.get("__table__", None) or name
+
+        logging.info("found model: %s (table: %s)" % (name, tableName))
         mappings = dict()  # 空dict,用于保存Field映射，再赋给attrs["__mappings__"]
         fields = []
         primaryKey = None
         for k, v in attrs.items():
             if isinstance(v, Field):
+                logging.info("  found mapping: %s ==> %s" % (k, v))
                 mappings[k] = v
                 if v._primary_key:
                     primaryKey = k
@@ -185,7 +186,7 @@ class ModelMetaclass(type):
             ", ".join(escaped_fields),
             tableName,
         )
-        attrs["__insert__"] = "insert into `%s`(%s, `%s`)values (%s)" % (
+        attrs["__insert__"] = "insert into `%s` (%s, `%s`) values (%s)" % (
             tableName,
             ", ".join(escaped_fields),
             primaryKey,
@@ -217,24 +218,20 @@ class Model(dict, metaclass=ModelMetaclass):
         return self.__getattr__(key)
 
     def getValueOrDefault(self, key):
-        value = getattr(self, key, None)
+        value = self.__getattr__(key)
         if value is None:
             field = self.__mappings__[key]
-            if field.default is not None:
-                value = field.default() if callable(field.default) else field.default
+            if field._default is not None:
+                value = field._default() if callable(field._default) else field._default
                 self.__setattr__(key, value)
         return value
 
     @classmethod
     async def findAll(cls, where=None, args=None, **kw):
-        """TODO: Docstring for findAll.
-
-        :where: TODO
-        :args: TODO
-        :**kw: TODO
-        :returns: TODO
-
         """
+        find all objects in cursor
+        """
+
         sql = [cls.__select__]
         if where:
             sql.append("where")
@@ -243,7 +240,7 @@ class Model(dict, metaclass=ModelMetaclass):
             args = []
         orderBy = kw.get("orderBy", None)
         if orderBy:
-            sql.append("orderby")
+            sql.append("order by")
             sql.append(orderBy)
 
         limit = kw.get("limit", None)
@@ -256,7 +253,7 @@ class Model(dict, metaclass=ModelMetaclass):
                 sql.append("?, ?")
                 args.extend(limit)
             else:
-                raise ValueError
+                raise ValueError("Invalid limit value: %s" % str(limit))
         res = await select(" ".join(sql), args)
         return [cls(**r) for r in res]
 
@@ -284,7 +281,7 @@ class Model(dict, metaclass=ModelMetaclass):
         res = await select(
             "%s where `%s`=?" % (cls.__select__, cls.__primary_key__), [pk], 1
         )
-        if len(rs) == 0:
+        if len(res) == 0:
             return None
         return cls(**rs[0])
 
@@ -293,14 +290,20 @@ class Model(dict, metaclass=ModelMetaclass):
         args = list(map(self.getValueOrDefault, self.__fields__))
         args.append(self.getValueOrDefault(self.__primary_key__))
         rows = await execute(self.__insert__, args)
+        if rows != 1:
+            logging.warn("failed to insert record: affected rows: %s" % rows)
 
     async def update(self):
 
         args = list(map(self.getValue, self.__fields__))
         args.append(self.getValue(self.__primary_key__))
         rows = await execute(self.__update__, args)
+        if rows != 1:
+            logging.warn("failed to update by primary key: affected rows: %s" % rows)
 
     async def remove(self):
 
         args = [self.getValue(self.__primary_key__)]
         rows = await execute(self.__delete__, args)
+        if rows != 1:
+            logging.warn("failed to remove by primary key: affected rows: %s" % rows)

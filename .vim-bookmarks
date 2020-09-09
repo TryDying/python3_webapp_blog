@@ -1,0 +1,3 @@
+let l:bm_file_version = 1
+let l:bm_sessions = {'default': {'/home/trydying/LightingCK/wide_python3_webapp_blog/www/orm.py': [{'sign_idx': 9501, 'line_nr': 166, 'content': '            raise Warning("Primary key not found")'},{'sign_idx': 9500, 'line_nr': 111, 'content': '    #  def __init__(self, name=None, primary_key=False, default=False):'},],}}
+let l:bm_current_session = 'default'
