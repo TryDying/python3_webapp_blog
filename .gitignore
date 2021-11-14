@@ -1,6 +1,6 @@
 .vimspector.json
 .mypy_cache
-.vim
+.vim*
 __pycache__
 .root
 .vimrc
